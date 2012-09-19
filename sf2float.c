@@ -22,7 +22,7 @@ int main(int argc, char* argv[])
 	if(argc < 3){
 		printf("insufficient arguments.\n"
 				"usage:\n\t"
-				"sf2float infile outfile\n");
+				"audiodize infile outfile\n");
 		return 1;
 	}
 	/* be good, and startup portsf */
