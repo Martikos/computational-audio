@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "portsf.h"
+#include <string.h>
 
 int main(int argc, char* argv[])
 {
@@ -16,6 +17,11 @@ int main(int argc, char* argv[])
 	PSF_CHPEAK* peaks = NULL;
 	float* frame = NULL;
 	psf_format outformat =  PSF_FMT_UNKNOWN;
+  
+  /*
+   * variables to be used in my customized program
+   */
+  int multiplier = 1;
 
 	printf("SF2FLOAT: convert soundfile to 32bit floats format\n");
 
@@ -25,13 +31,44 @@ int main(int argc, char* argv[])
 				"audiodize infile outfile\n");
 		return 1;
 	}
+
+  /*
+   * for lack of a good argument parser,
+   * odd arguments are argument types,
+   * even arguments are argument values.
+   */
+  int infileIndex = 0;
+  int outfileIndex = 0;
+
+  for (i = 1; i < argc-1; i+=2) {
+    if (!strcmp(argv[i],"-m")) {
+      multiplier = atoi(argv[i+1]);
+    }
+    if (!strcmp(argv[i],"-sm")) {
+      multiplier = atoi(argv[i+1]);
+    }
+    if (!strcmp(argv[i], "-i")) {
+      infileIndex = i+1;
+    }
+    if (!strcmp(argv[i], "-o")) {
+      outfileIndex = i+1;
+    }
+
+  }
+  printf("input file: %s", argv[infileIndex]);
+  printf("output file: %s", argv[outfileIndex]);
+
 	/* be good, and startup portsf */
 	if(psf_init()){
 		printf("unable to start portsf\n");
 		return 1;
 	}
+  if(infileIndex==0 || outfileIndex==0) {
+    printf("Error: infile or outfile not specified\n");
+    return 1;
+  }
 	
-	ifd = psf_sndOpen(argv[1],&props,0);																		  
+	ifd = psf_sndOpen(argv[infileIndex],&props,0);																		  
 	if(ifd < 0){
 		printf("Error: unable to open infile %s\n",argv[1]);
 		return 1;
@@ -54,7 +91,7 @@ int main(int argc, char* argv[])
 	}
 	props.samptype = PSF_SAMP_IEEE_FLOAT;
 	/* check file extension of outfile name, so we use correct output file format*/
-	outformat = psf_getFormatExt(argv[2]);
+	outformat = psf_getFormatExt(argv[outfileIndex]);
 	if(outformat == PSF_FMT_UNKNOWN){
 		printf("outfile name %s has unknown format.\n"
 			"Use any of .wav, .aiff, .aif, .afc, .aifc\n",argv[2]);
@@ -63,7 +100,7 @@ int main(int argc, char* argv[])
 	}
 	props.format = outformat;
 
-	ofd = psf_sndCreate(argv[2],&props,0,0,PSF_CREATE_RDWR);
+	ofd = psf_sndCreate(argv[outfileIndex],&props,0,0,PSF_CREATE_RDWR);
 	if(ofd < 0){
 		printf("Error: unable to create outfile %s\n",argv[2]);
 		error++;
@@ -89,9 +126,11 @@ int main(int argc, char* argv[])
 	/* single-frame loop to do copy: report any read/write errors */
 	framesread = psf_sndReadFloatFrames(ifd,frame,1);
 	totalread = 0;		/* count sample frames as they are copied */
-    int downSampleFactor = 1;
-    int pushupFactor = 0;
-    int down = 1;
+
+  /*
+   * for pre processing, do a first visit over the file
+   */
+
 	while (framesread == 1){
 
         /*
@@ -101,8 +140,8 @@ int main(int argc, char* argv[])
             /*
              * Example division by 2
              */
-            frame[0] = frame[0]/2;
-            frame[1] = frame[1]/2;
+            frame[0] = frame[0]*multiplier;
+            frame[1] = frame[1]*multiplier;
 
         /*
          * My own code ends.
@@ -110,16 +149,12 @@ int main(int argc, char* argv[])
 
 
         // if((int)(totalread/downSampleFactor)==(totalread/downSampleFactor))
-        for (i = 0; i < downSampleFactor; i++) {
             totalread++;
             if(psf_sndWriteFloatFrames(ofd,frame,1) != 1){
                 printf("Error writing to outfile\n");
                 error++;
                 break;
             }
-            // downSampleFactor = (downSampleFactor++)%10;
-
-        }
 
 		framesread = psf_sndReadFloatFrames(ifd,frame,1);
 	}
