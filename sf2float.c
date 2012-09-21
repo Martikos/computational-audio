@@ -22,6 +22,7 @@ int main(int argc, char* argv[])
    * variables to be used in my customized program
    */
   int multiplier = 1;
+  int pan = 0.5;
 
 	printf("SF2FLOAT: convert soundfile to 32bit floats format\n");
 
@@ -31,6 +32,14 @@ int main(int argc, char* argv[])
 				"audiodize infile outfile\n");
 		return 1;
 	}
+
+  /*
+   * created variables for saving mods
+   */
+  int mode_m = 0;
+  int mode_sm = 0;
+  int mode_ltr = 0;
+  int mode_pan = 0;
 
   /*
    * for lack of a good argument parser,
@@ -43,10 +52,21 @@ int main(int argc, char* argv[])
   for (i = 1; i < argc-1; i+=2) {
     if (!strcmp(argv[i],"-m")) {
       multiplier = atoi(argv[i+1]);
+      mode_m = 1;
     }
     if (!strcmp(argv[i],"-sm")) {
       multiplier = atoi(argv[i+1]);
+      mode_sm = 1;
     }
+    if (!strcmp(argv[i],"-pan")) {
+      pan = atoi(argv[i+1]);
+      mode_pan = 1;
+    }
+    if (!strcmp(argv[i],"-ltr")) {
+      mode_ltr = 1;
+      i--;
+    }
+
     if (!strcmp(argv[i], "-i")) {
       infileIndex = i+1;
     }
@@ -127,37 +147,94 @@ int main(int argc, char* argv[])
 	framesread = psf_sndReadFloatFrames(ifd,frame,1);
 	totalread = 0;		/* count sample frames as they are copied */
 
+
+
+  /*
+   * My own code begins.
+   */
+
   /*
    * for pre processing, do a first visit over the file
    */
 
-	while (framesread == 1){
+  /*
+   * mode: multiplication (-m or -sm)
+   */
+  if(mode_m==1 || mode_sm==1) {
+    while(framesread == 1) {
+      double xx = frame[0];
+      double yy = frame[1];
+      frame[0] = frame[0]*multiplier;
+      frame[1] = frame[1]*multiplier;
+      printf("%f %f\t%f %f\n", xx, yy, frame[0], frame[1]);
+      
+      totalread++;
+      if(psf_sndWriteFloatFrames(ofd,frame,1) != 1){
+          printf("error writing to outfile\n");
+          error++;
+          break;
+      }
+      framesread = psf_sndReadFloatFrames(ifd,frame,1);
+    }
+  }
+  if(mode_ltr==1) {
+    printf("hahahahahahahahhhahhahah!");
+    while(framesread == 1) {
+      frame[1] = frame[0];
+      printf("%f %f\n", frame[0], frame[1]);
+      
+      totalread++;
+      if(psf_sndWriteFloatFrames(ofd,frame,1) != 1){
+          printf("error writing to outfile\n");
+          error++;
+          break;
+      }
+      framesread = psf_sndReadFloatFrames(ifd,frame,1);
+    }
+  }
 
-        /*
-         * My own code begins.
-         */
+  /*
+   * mode: panning (-pan)
+   */
+  else if(mode_pan==1) {
+    int cycleSampleSize = pan*44100;
+    // when left is going up and right is going down
+    int cycle1Limit = cycleSampleSize/4;
+    // when left is going down and right is going up
+    int cycle4Limit = 3*cycleSampleSize/4;
+    int currentSample = 0;
 
-            /*
-             * Example division by 2
-             */
-            frame[0] = frame[0]*multiplier;
-            frame[1] = frame[1]*multiplier;
+    int sampleCount = 0;
+    double panFactor = 1;
+    
+    while (framesread == 1){
+      frame[0]*=panFactor;
+      frame[1]/=panFactor;
+      if (currentSample<=cycle1Limit || currentSample>cycle4Limit) {
+        panFactor+=0.000015;
+      }
+      else {
+        panFactor-=0.000015;
+      }
+      // printf("%f\n", panFactor);
+      totalread++;
+      currentSample++;
+      if(currentSample==pan*44100) {
+        currentSample = 0;
+        printf("+1s");
+      }
+      if(psf_sndWriteFloatFrames(ofd,frame,1) != 1){
+          printf("error writing to outfile\n");
+          error++;
+          break;
+      }
+      framesread = psf_sndReadFloatFrames(ifd,frame,1);
+    }
+  }
 
-        /*
-         * My own code ends.
-         */
-
-
-        // if((int)(totalread/downSampleFactor)==(totalread/downSampleFactor))
-            totalread++;
-            if(psf_sndWriteFloatFrames(ofd,frame,1) != 1){
-                printf("Error writing to outfile\n");
-                error++;
-                break;
-            }
-
-		framesread = psf_sndReadFloatFrames(ifd,frame,1);
-	}
+  /*
+   * My own code ends.
+   */
 	if(framesread < 0)	{
 		printf("Error reading infile. Outfile is incomplete.\n");
 		error++;
