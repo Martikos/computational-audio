@@ -23,6 +23,7 @@ int main(int argc, char* argv[])
    */
   int multiplier = 1;
   int pan = 0.5;
+  int env_interval = 50; // in milliseconds
 
 	printf("SF2FLOAT: convert soundfile to 32bit floats format\n");
 
@@ -40,6 +41,7 @@ int main(int argc, char* argv[])
   int mode_sm = 0;
   int mode_ltr = 0;
   int mode_pan = 0;
+  int mode_env = 0;
 
   /*
    * for lack of a good argument parser,
@@ -61,6 +63,10 @@ int main(int argc, char* argv[])
     if (!strcmp(argv[i],"-pan")) {
       pan = atoi(argv[i+1]);
       mode_pan = 1;
+    }
+    if (!strcmp(argv[i],"-env")) {
+      env_interval = atoi(argv[i+1]);
+      mode_env= 1;
     }
     if (!strcmp(argv[i],"-ltr")) {
       mode_ltr = 1;
@@ -112,7 +118,7 @@ int main(int argc, char* argv[])
 	props.samptype = PSF_SAMP_IEEE_FLOAT;
 	/* check file extension of outfile name, so we use correct output file format*/
 	outformat = psf_getFormatExt(argv[outfileIndex]);
-	if(outformat == PSF_FMT_UNKNOWN){
+	if(outformat == PSF_FMT_UNKNOWN && !(mode_env==1)){
 		printf("outfile name %s has unknown format.\n"
 			"Use any of .wav, .aiff, .aif, .afc, .aifc\n",argv[2]);
 		error++;
@@ -120,12 +126,14 @@ int main(int argc, char* argv[])
 	}
 	props.format = outformat;
 
-	ofd = psf_sndCreate(argv[outfileIndex],&props,0,0,PSF_CREATE_RDWR);
-	if(ofd < 0){
-		printf("Error: unable to create outfile %s\n",argv[2]);
-		error++;
-		goto exit;
-	}
+  if(mode_env!=1) {
+    ofd = psf_sndCreate(argv[outfileIndex],&props,0,0,PSF_CREATE_RDWR);
+    if(ofd < 0){
+      printf("Error: unable to create outfile %s\n",argv[2]);
+      error++;
+      goto exit;
+    }
+  }
 
 	/* allocate space for one sample frame */
 	frame = (float*) malloc(props.chans * sizeof(float));
@@ -178,7 +186,6 @@ int main(int argc, char* argv[])
     }
   }
   if(mode_ltr==1) {
-    printf("hahahahahahahahhhahhahah!");
     while(framesread == 1) {
       frame[1] = frame[0];
       printf("%f %f\n", frame[0], frame[1]);
@@ -221,7 +228,6 @@ int main(int argc, char* argv[])
       currentSample++;
       if(currentSample==pan*44100) {
         currentSample = 0;
-        printf("+1s");
       }
       if(psf_sndWriteFloatFrames(ofd,frame,1) != 1){
           printf("error writing to outfile\n");
@@ -231,6 +237,42 @@ int main(int argc, char* argv[])
       framesread = psf_sndReadFloatFrames(ifd,frame,1);
     }
   }
+  /*
+   * envelop creator mode (-env)
+   */
+  else if(mode_env==1) {
+    FILE *file;
+    file = fopen(argv[outfileIndex], "w+");
+    double sampleInterval = 44100*(double)env_interval/1000;
+    double currentSample = 0;
+    double max = 0;
+    double n =0;
+    while (framesread ==1) {
+      if(currentSample < sampleInterval) {
+        if(max<frame[0]) {
+          max=frame[0];
+        }
+        if (max<frame[1]) {
+          max=frame[1];
+        }
+        currentSample++;
+      }
+      else {
+        currentSample = 0;
+        fprintf(file,"%f %f\n", (double)(n*sampleInterval), max);
+        max = 0;
+        n++;
+      }
+      totalread++;
+      if(currentSample==pan*44100) {
+        currentSample = 0;
+      }
+      
+      framesread = psf_sndReadFloatFrames(ifd,frame,1);
+    }
+    fclose(file);
+  }
+
 
   /*
    * My own code ends.
@@ -242,15 +284,17 @@ int main(int argc, char* argv[])
 	else
 		printf("Done. %ld sample frames copied to %s\n",totalread,argv[2]);
 	/* report PEAK values to user */
-	if(psf_sndReadPeaks(ofd,peaks,NULL) > 0){
-		long i;
-		double peaktime;
-		printf("PEAK information:\n");	
-			for(i=0;i < props.chans;i++){
-				peaktime = (double) peaks[i].pos / (double) props.srate;
-				printf("CH %ld:\t%.4f at %.4f secs\n", i+1, peaks[i].val, peaktime);
-			}
-	}	
+  if(mode_env!=1) {
+    if(psf_sndReadPeaks(ofd,peaks,NULL) > 0){
+      long i;
+      double peaktime;
+      printf("PEAK information:\n");	
+        for(i=0;i < props.chans;i++){
+          peaktime = (double) peaks[i].pos / (double) props.srate;
+          printf("CH %ld:\t%.4f at %.4f secs\n", i+1, peaks[i].val, peaktime);
+        }
+    }	
+  }
 	/* do all cleanup  */    
 exit:	 	if(ifd >= 0)
 		psf_sndClose(ifd);
