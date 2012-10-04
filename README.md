@@ -1,5 +1,8 @@
 # Wav File Editor
 This project is part of a Computational Audio Course CS591, given at the BU Computer Science department.
+As deadmau5 says: 
+> Give me the sound to see another world outside that's full of
+> all the broken things that I made.
 
 
 ## Implemented Functionalityes:
