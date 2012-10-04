@@ -3,16 +3,16 @@ This project is part of a Computational Audio Course CS591, given at the BU Comp
 
 
 ## Implemented Functionalityes:
-Parses wav file and generates a new file based on the same samples (Normal Copy ^^)
+Parse wav file and generate a new file with the same samples (Normal Copy ^^)
 ``./audio 0 beatles.wave beatlesfp.wav `./audio 0 beatles.wave beatlesfp.wav``
 
-Cuts wav file amplitude by half.
+Cut wav file amplitude by half.
 ``./audio 1 beatles.wav beatleshalf.wav``
 
-Pans the signal from left to right and back, implemented 5 seconds pan.
+Pan the signal from left to right and back, with 5 seconds pan.
 ``./audio 2 beatlesmono.wav beatlespan.wav``
 
-Creates an Envelope for the wav file, and stores values in a text file.
+Create an Envelope for the wav file, and store values in a text file.
 ``./audio 3 beatles.wav beatles.env.txt``
 
 Reshape wave file with the loaded amplitude.
