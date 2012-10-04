@@ -1,6 +1,6 @@
 # Wav File Editor
 This project is part of a Computational Audio Course CS591, given at the BU Computer Science department.
-As deadmau5 says: 
+In the words of Deadmau5 feat. Gerard Way - Professional Griefers:
 > Give me the sound to see another world outside that's full of
 > all the broken things that I made.
 
