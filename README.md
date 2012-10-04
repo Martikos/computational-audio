@@ -3,6 +3,7 @@ This project is part of a Computational Audio Course CS591, given at the BU Comp
 
 
 ## Implemented Functionalityes:
+
 Parse wav file and generate a new file with the same samples (Normal Copy ^^)
 
 ``./audiodize 0 beatles.wave beatlesfp.wav `./audio 0 beatles.wave beatlesfp.wav``
