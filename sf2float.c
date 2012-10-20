@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
 	}
 	
 	ifd = psf_sndOpen(argv[2],&props,0);																		  
-	if(ifd < 0){
+	if(ifd < 0 && atoi(argv[1])!=5){
 		printf("Error: unable to open infile %s\n",argv[2]);
 		return 1;
 	}
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
 	/* check file extension of outfile name, so we use correct output file format*/
 
   // TODO: needs to be changed because output is not always the same format
-  if (atoi(argv[1])<3) {
+  if (atoi(argv[1])<3 || atoi(argv[1])==5) {
     outformat = psf_getFormatExt(argv[3]);
     printf("output file format: %d", outformat);
     if(outformat == PSF_FMT_UNKNOWN){
@@ -79,8 +79,15 @@ int main(int argc, char* argv[])
   }
 	props.format = outformat;
 
-	if(atoi(argv[1])<3) {
+	if(atoi(argv[1])<3 || atoi(argv[1])==5) {
+    props.srate = 44100;
+    props.chans = 2; 
+    props.samptype = PSF_SAMP_IEEE_FLOAT;
+    props.format = PSF_STDWAVE; 
+    props.chformat = STDWAVE; 
+
     ofd = psf_sndCreate(argv[3],&props,0,0,PSF_CREATE_RDWR);
+
     if(ofd < 0){
       printf("Error: unable to create outfile %s\n",argv[3]);
       error++;
@@ -110,12 +117,13 @@ int main(int argc, char* argv[])
 		error++;
 		goto exit;
 	}
-	printf("copying....\n");
 
-	/* single-frame loop to do copy: report any read/write errors */
-	framesread = psf_sndReadFloatFrames(ifd,frame,1);
-	totalread = 0;		/* count sample frames as they are copied */
-
+   // if(atoi(argv[1])!=5) {
+     //printf("copying....\n");
+    /* single-frame loop to do copy: report any read/write errors */
+    // framesread = psf_sndReadFloatFrames(ifd,frame,1);
+    // totalread = 0;		/* count sample frames as they are copied */
+  // }
 
   int part = atoi(argv[1]);
 
@@ -130,7 +138,6 @@ int main(int argc, char* argv[])
     case 0:
       while (framesread == 1){
         totalread++;
-        printf("%f %f\n", frame[0], frame[1]);
         if(psf_sndWriteFloatFrames(ofd,frame,1) != 1){
             printf("Error writing to outfile\n");
             error++;
@@ -221,6 +228,9 @@ int main(int argc, char* argv[])
               fclose(file);
               break;
             }
+    /*
+     * apply envelope on file
+     */
     case 4:
             {
               // open up file, put the reading index on the first line
@@ -266,6 +276,83 @@ int main(int argc, char* argv[])
                     break;
                 }
                 framesread = psf_sndReadFloatFrames(ifd,frame,1);
+              }
+              break;
+            }
+    /*
+     * add up sine waves
+     */
+    case 5: {
+              FILE *file;
+              file = fopen(argv[2], "r");
+              char sineAmplitudeString[20], sineFrequencyString[20], space[1];
+              double sineAmplitude, sineFrequency; 
+              double sineAmplitudes[20], sineFrequencies[20];
+              int currentIndex = 0;
+              int arraySize=0;
+              while (!feof(file)) {
+                if(fgets(sineFrequencyString, 5, file) != NULL) {
+                      sineFrequency = strtod(sineFrequencyString, NULL);
+                  if(sineFrequency==-1)
+                    break;
+                  else {
+                      sineFrequencies[currentIndex] = sineFrequency;
+                    if(fgets(space, 1, file) != NULL) {}
+                    if(fgets(sineAmplitudeString, 20, file) != NULL) {
+                      sineAmplitude = strtod(sineAmplitudeString, NULL);
+                      sineAmplitudes[currentIndex] = sineAmplitude;
+                      currentIndex++;
+                    }
+                  }
+                }
+              }
+              arraySize = currentIndex;
+              currentIndex = 0;
+              int i;
+              for(i=0; i<arraySize; i++) {
+                printf(" %f %f \n", sineAmplitudes[i], sineFrequencies[i]);
+              }
+              // do i assume it is 0.05?
+              double intervalTime = 0.05;
+              char intervalLimitString[20], valueString[20];
+              double intervalLimit=-1, value=0;
+              // to do the linear regression and get the factor
+              double prevValue = 0;
+              double slope = 0;
+              double intercept = 0;
+              double factor = 1;
+              double current=0;
+
+              while(!feof(file)){
+                  if(current/44100 >= intervalLimit ) {
+                    if(fgets(intervalLimitString, 10, file) != NULL) {
+                      intervalLimit = strtod(intervalLimitString, NULL);
+                    }
+                    if(fgets(space, 1, file) != NULL) {}
+                    if(fgets(valueString, 12, file) != NULL) {
+                      prevValue = value;
+                      value = strtod(valueString, NULL);
+                      slope = (value-prevValue)/intervalTime;
+                      intercept = prevValue;
+                    }
+                  }
+                  factor = ((double)((int)current%((int)(44100*intervalTime)))/44100)*slope + intercept;
+                  printf("%f\n", factor);
+                  // compute frame[1] and frame[2]
+                  frame[0] = 0;
+                  int i;
+                  for(i=0; i<arraySize; i++) {
+                    frame[0] += sineAmplitudes[i]*sin(2*M_PI*current*sineFrequencies[i]/44100);
+                  }
+                  frame[0] = frame[0]*factor;
+                  frame[1] = frame[0];
+
+                  if(psf_sndWriteFloatFrames(ofd,frame,1) != 1){
+                      printf("Error writing to outfile\n");
+                      error++;
+                      break;
+                  }
+                  current++;
               }
               break;
             }
